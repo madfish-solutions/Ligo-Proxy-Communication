@@ -8,7 +8,7 @@ program.version('0.0.1');
 const setup = async () => {
     const { email, password, mnemonic, secret } = JSON.parse(fs.readFileSync('./faucet.json').toString())
 
-    Tezos.setProvider({ rpc: "https://api.tez.ie/rpc/babylonnet" })
+    Tezos.setProvider({ rpc: "https://rpcalpha.tzbeta.net" })
 
     await Tezos.importKey(email, password, mnemonic.join(" "), secret)
     return Tezos;
