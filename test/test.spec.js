@@ -1,7 +1,9 @@
 const { TezosToolkit } = require('@taquito/taquito')
 const fs = require("fs");
 const assert = require('assert')
-const { address, network } = JSON.parse(fs.readFileSync("./deployed/latest.json").toString())
+const { address: tokenAddress } = JSON.parse(fs.readFileSync("./deployed/Token.json").toString())
+const { address: proxyAddress } = JSON.parse(fs.readFileSync("./deployed/Proxy.json").toString())
+const { address: receiverAddress, network } = JSON.parse(fs.readFileSync("./deployed/Receiver.json").toString())
 const BigNumber = require('bignumber.js');
 
 const transferType = {
@@ -56,6 +58,31 @@ const transferToken = (from, to, amount, contract) => {
     ];
 };
 
+const transferToContract = (key, amount) => {
+    return [{ "prim": "DROP" },
+    { "prim": "NIL", "args": [{ "prim": "operation" }] },
+    {
+        "prim": "PUSH",
+        "args":
+            [{ "prim": "address" },
+            { "string": key }]
+    },
+    { "prim": "CONTRACT", "args": [{ "prim": "unit" }] },
+    [{
+        "prim": "IF_NONE",
+        "args":
+            [[[{ "prim": "UNIT" }, { "prim": "FAILWITH" }]],
+            []]
+    }],
+    {
+        "prim": "PUSH",
+        "args": [{ "prim": "mutez" }, { "int": `${amount}` }]
+    },
+    { "prim": "UNIT" }, { "prim": "TRANSFER_TOKENS" },
+    { "prim": "CONS" }]
+}
+
+
 const createTezosFromFaucet = async (path) => {
     const { email, password, mnemonic, secret } = JSON.parse(fs.readFileSync(path).toString())
     const Tezos = new TezosToolkit();
@@ -65,10 +92,10 @@ const createTezosFromFaucet = async (path) => {
 }
 
 const getAccounts = async () => {
-    const Tezos1 = await createTezosFromFaucet('./faucet.json');
-    const Tezos2 = await createTezosFromFaucet('./faucet2.json');
-    const manager = await Tezos1.contract.at('KT1PhLwXfhn1UQnuU1ceJ8SvtNeMdcg6ygwY')
-    return { Tezos1, Tezos2, manager }
+    const Tezos1 = await createTezosFromFaucet('./faucet2.json');
+    // const Tezos2 = await createTezosFromFaucet('./faucet2.json');
+    // const manager = await Tezos1.contract.at('KT1PhLwXfhn1UQnuU1ceJ8SvtNeMdcg6ygwY')
+    return { Tezos1 }
 }
 
 const getFullStorage = async (address, keys) => {
@@ -101,22 +128,28 @@ const getFullStorage = async (address, keys) => {
     }
 }
 
-const testTransferToManager = async (address, amount = "2") => {
-    const { Tezos1, manager } = await getAccounts()
+const testTransferToManager = async (receiverAddress, proxyAddress, tokenAddress) => {
+    const { Tezos1 } = await getAccounts()
 
     const pkh = await Tezos1.signer.publicKeyHash();
-    const initialStorage = await getFullStorage(address, [pkh, manager.address])
-
-    const contract3 = await Tezos1.contract.at(address)
-    const operation = await contract3.methods.transfer(pkh, manager.address, amount).send()
+    
+    const receiverContract = await Tezos1.contract.at(receiverAddress)
+    const tokenContract = await Tezos1.contract.at(tokenAddress)
+    const proxyContract = await Tezos1.contract.at(proxyAddress)
+    // await Tezos1.contract.methods.do(transferToContract(receiverContract.address, 1)).send({ amount: 0, gasLimit: 8000 })
+    // await Tezos1.contract.transfer({ to: receiverContract.address, gasLimit: 800000, amount: 1 })
+    // await Tezos1.contract.transfer({ to: tokenContract.address, gasLimit: 800000, amount: 1 })
+    // await Tezos1.contract.transfer({ to: proxyContract.address, gasLimit: 800000, amount: 1 })
+    const operation = await receiverContract.methods.request(pkh, proxyContract.address, tokenContract.address).send({ gasLimit: 800000, amount: 1 })
+    console.log(operation);
     await operation.confirmation();
 
     assert(operation.status === 'applied', 'Operation was not applied')
 
-    const finalStorage = await getFullStorage(address, [pkh, manager.address])
+    // const finalStorage = await getFullStorage(address, [pkh, manager.address])
 
-    assert(initialStorage.accounts[pkh].balance.toString() === finalStorage.accounts[pkh].balance.plus(amount).toString())
-    assert(initialStorage.accounts[manager.address].balance.toString() === finalStorage.accounts[manager.address].balance.minus(amount).toString())
+    // assert(initialStorage.accounts[pkh].balance.toString() === finalStorage.accounts[pkh].balance.plus(amount).toString())
+    // assert(initialStorage.accounts[manager.address].balance.toString() === finalStorage.accounts[manager.address].balance.minus(amount).toString())
 }
 
 const testTransferToImplicit = async (address, amount = "2") => {
@@ -291,36 +324,35 @@ const expectThrow = async (fn) => {
 }
 
 const assertInvariant = async (testFn) => {
-    const { Tezos1, Tezos2, manager } = await getAccounts()
+    const { Tezos1 } = await getAccounts()
     const pkh = await Tezos1.signer.publicKeyHash();
-    const pkh2 = await Tezos2.signer.publicKeyHash();
     await testFn();
-    const finalStorage = await getFullStorage(address, [pkh, pkh2, manager.address])
+    // const finalStorage = await getFullStorage(address, [pkh, pkh2, manager.address])
 
-    const totalSupply = Object.keys(finalStorage.accounts).reduce((prev, current) => prev + finalStorage.accounts[current].balance.toNumber(), 0)
-    assert(totalSupply === finalStorage.totalSupply.toNumber(), `Expected ${totalSupply} to be ${finalStorage.totalSupply.toNumber()}`)
+    // const totalSupply = Object.keys(finalStorage.accounts).reduce((prev, current) => prev + finalStorage.accounts[current].balance.toNumber(), 0)
+    // assert(totalSupply === finalStorage.totalSupply.toNumber(), `Expected ${totalSupply} to be ${finalStorage.totalSupply.toNumber()}`)
 }
 
 const test = async () => {
     const tests = [
-        () => testTransferToManager(address),
-        () => testAllowanceToManager(address, "2"),
-        () => testAllowanceToManager(address, "5"),
-        () => testAllowanceFromManager(address),
-        () => testAllowanceToManager(address, "0"),
-        () => expectThrow(() => testAllowanceFromManager(address)),
-        () => expectThrow(() => testTransferInsufficientAmount(address)),
-        () => expectThrow(() => testTransferUnapprovedAmount(address)),
-        () => testTransferToImplicit(address),
-        () => testAllowanceToImplicit(address, "5"),
-        () => testAllowanceFromImplicit(address),
-        () => expectThrow(() => testAllowanceToImplicit(address, "-5")),
-        () => expectThrow(() => testTransferToImplicit(address, "-5")),
-        () => expectThrow(() => testTransferToManager(address, "-2")),
-        () => testMintFromOwner(address),
-        () => expectThrow(() => testMintFromNotOwner(address)),
-        () => expectThrow(() => testBurnFromOwner(address, "200")),
-        () => testBurnFromOwner(address, 1)
+        () => testTransferToManager(receiverAddress, proxyAddress, tokenAddress),
+        // () => testAllowanceToManager(address, "2"),
+        // () => testAllowanceToManager(address, "5"),
+        // () => testAllowanceFromManager(address),
+        // () => testAllowanceToManager(address, "0"),
+        // () => expectThrow(() => testAllowanceFromManager(address)),
+        // () => expectThrow(() => testTransferInsufficientAmount(address)),
+        // () => expectThrow(() => testTransferUnapprovedAmount(address)),
+        // () => testTransferToImplicit(address),
+        // () => testAllowanceToImplicit(address, "5"),
+        // () => testAllowanceFromImplicit(address),
+        // () => expectThrow(() => testAllowanceToImplicit(address, "-5")),
+        // () => expectThrow(() => testTransferToImplicit(address, "-5")),
+        // () => expectThrow(() => testTransferToManager(address, "-2")),
+        // () => testMintFromOwner(address),
+        // () => expectThrow(() => testMintFromNotOwner(address)),
+        // () => expectThrow(() => testBurnFromOwner(address, "200")),
+        // () => testBurnFromOwner(address, 1)
     ];
 
     for (let test of tests) {
