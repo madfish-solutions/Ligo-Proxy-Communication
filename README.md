@@ -6,10 +6,14 @@ Run `npm install`
 
 Run `npm run build`
 
-## Using the cli for example
+## Using scripts
 
-`node cli.js deploy 200`
+`node build.js`
 
-`node cli.js storage KT1Kz1kXu39VKTpcAY1M3BWuv4zGp55i9Zsy`
+`node deploy.js`
 
-`node cli.js bigMap KT1Kz1kXu39VKTpcAY1M3BWuv4zGp55i9Zsy tz1bwsEWCwSEXdRvnJxvegQZKeX5dj6oKEys`
+`node cli.js storage CONTRACT_ADDRESS`
+
+## Testing 
+
+Read `test/manual_testing.sh`
