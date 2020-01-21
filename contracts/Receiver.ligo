@@ -2,26 +2,19 @@ type action is
 | Receive of nat
 | Request of (address * address * address)
 
-type amount is nat;
-
 type account is record
-    balance : amount;
-    allowances: map(address, amount);
+    balance : nat;
+    allowances: map(address, nat);
 end
 
 type tokenAction is
-| Transfer of (address * address * amount)
-| Mint of (amount)
-| Burn of (amount)
-| Approve of (address * amount)
-| GetAllowance of (address * address * contract(amount))
-| GetBalance of (address * contract(amount))
-| GetTotalSupply of (unit * contract(amount))
+| GetBalance of (address * contract(nat))
+| GetTotalSupply of (unit * contract(nat))
 
 function requestBalance (const user : address ; const proxy : address ; const token : address) : list(operation) is
  begin
   const contr: contract(tokenAction) = get_contract(token);
-  const receiver: contract(amount) = get_contract(proxy);
+  const receiver: contract(nat) = get_contract(proxy);
   const param: tokenAction = GetBalance(user, receiver);
   const operations : list(operation) = list transaction(param, 0tz, contr); end;
  end with operations
